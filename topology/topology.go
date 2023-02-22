@@ -5,102 +5,122 @@ import (
 	"go-joins-streams/models"
 	"go-joins-streams/producer"
 	"go-joins-streams/utils"
+	"sync"
 	"time"
 
 	"github.com/Shopify/sarama"
 )
 
+var p, _ = producer.NewProducer([]string{"localhost:9092"})
+
+
 func ValueJoiner(
-	channel_1 chan models.Enfant,
-	channel_2 chan models.Parent,
-	p *producer.Producer,
+	channel_1 chan models.Item,
+	channel_2 chan models.Request,
 	topic string,
 	joinTimeWindow time.Duration) {
 
 	fmt.Println("start joiner")
 
 	// Création des maps pour stocker temporairement les structs a joindre.
-	enfantsMap := make(map[string]models.Enfant)
-	parentsMap := make(map[string]models.Parent)
+	itemsMap := make(map[string]models.Item)
+	requestsMap := make(map[string]models.Request)
 
 	// Création des map pour stocker les timers de chaque message.
-	enfantsTimers := make(map[string]*time.Timer)
-	parentsTimers := make(map[string]*time.Timer)
+	itemsTimers := make(map[string]*time.Timer)
+	requestsTimers := make(map[string]*time.Timer)
 
 	windowedTime := joinTimeWindow
+
+	var mutex = sync.Mutex{}
 
 	// Sert a constater que les maps servant de store temporaire pour les jointures sont bien vidées.
 	time.AfterFunc(1 * time.Second, func() {
 		ticker := time.NewTicker(5 * time.Second)
 
 		for range ticker.C{
-			fmt.Println("Temp stores maps status:\nEnfants:", enfantsMap, "\nParents:", parentsMap)
+			fmt.Println("Temp stores maps status:\nitems:", itemsMap, "\nrequests:", requestsMap)
 		}
 	})
 
 	for {
 		select {
-		// Un struct enfant passe dans le channel.
-		case enfant := <-channel_1:
+		// Un struct item passe dans le channel.
+		case item := <-channel_1:
 
 			// Il est sauvegardé dans la map.
-			enfantJoinUuid := utils.UUID()
-			enfantsMap[enfantJoinUuid] = enfant
+			itemJoinUuid := utils.UUID()
+			mutex.Lock()
+			itemsMap[itemJoinUuid] = item
 
 			// Il sera supprimé apres le fenêtre de temps s'il n'a pas trouvé le struct correspondant.
-			enfantsTimers[enfantJoinUuid] = time.AfterFunc(windowedTime, func() {
-				delete(enfantsMap, enfantJoinUuid)
-				delete(enfantsTimers, enfantJoinUuid)
+			itemsTimers[itemJoinUuid] = time.AfterFunc(windowedTime, func() {
+				mutex.Lock()
+				delete(itemsMap, itemJoinUuid)
+				delete(itemsTimers, itemJoinUuid)
+				mutex.Unlock()
 			})
+			mutex.Unlock()
+
 
 			// Pour chaque element de la map, 
 			// Je cherche la valeur qui correspond dans la la map opposée.
-			// (ici la valeur recherchée est enfant.ParentId == parent.Id)
-			for eKey, eValue := range enfantsMap {
-				for _, pValue := range parentsMap {
+			// (ici la valeur recherchée est item.SenderId == sender.Id)
+			mutex.Lock()
+			for iKey, iValue := range itemsMap {
+				for _, rValue := range requestsMap {
 					
 					// Si je trouve une correspondance, je produit l'aggregation dans le topic de sortie,
 					// la valeur est supprimée de la map.
-					if *eValue.ParentId == *pValue.Id {
+					if *iValue.RequestId == *rValue.Id {
 						p.Input <- &sarama.ProducerMessage{
 							Topic: topic,
 							Key:   sarama.StringEncoder("aggregated"),
-							Value: sarama.StringEncoder(models.NewEnfantMarshal(*eValue.Id, *eValue.Name, *eValue.ParentId, *pValue.Name)),
+							Value: sarama.StringEncoder(models.NewItemMarshal(*iValue.Id, *iValue.Name, *iValue.RequestId, *rValue.Sender)),
 						}
-						delete(enfantsMap, eKey)
-						delete(enfantsTimers, eKey)
-						fmt.Println(*eValue.Name, "says: I found my parent:", *pValue.Name)
+						delete(itemsMap, iKey)
+						delete(itemsTimers, iKey)
+						fmt.Println(*iValue.Name, "est un destinataire de l'envoi de l'entreprise:", *rValue.Sender)
 						break
 					}
 				}
 			}
+			mutex.Unlock()
+
 
 		// Même chose de l'autre coté, a ceci près que ces structs ne sont
 		// supprimés de leur map que par expiration de la fenêtre de temps.
-		case parent := <-channel_2:
+		case request := <-channel_2:
 
-			parentJoinUuid := utils.UUID()
-			parentsMap[parentJoinUuid] = parent
-			parentsTimers[parentJoinUuid] = time.AfterFunc(windowedTime, func() {
-				delete(parentsMap, parentJoinUuid)
-				delete(parentsTimers, parentJoinUuid)
+			requestJoinUuid := utils.UUID()
+			mutex.Lock()
+			requestsMap[requestJoinUuid] = request
+			requestsTimers[requestJoinUuid] = time.AfterFunc(windowedTime, func() {
+				mutex.Lock()
+				delete(requestsMap, requestJoinUuid)
+				delete(requestsTimers, requestJoinUuid)
+				mutex.Unlock()
 			})
+			mutex.Unlock()
 
-			for _, pValue := range parentsMap {
-				for eKey, eValue := range enfantsMap {
-					if *pValue.Id == *eValue.ParentId {
+			mutex.Lock()
+			for _, rValue := range requestsMap {
+				for iKey, iValue := range itemsMap {
+					if *rValue.Id == *iValue.RequestId {
 						p.Input <- &sarama.ProducerMessage{
 							Topic: topic,
 							Key:   sarama.StringEncoder("aggregated"),
-							Value: sarama.StringEncoder(models.NewEnfantMarshal(*eValue.Id, *eValue.Name, *eValue.ParentId, *pValue.Name)),
+							Value: sarama.StringEncoder(models.NewItemMarshal(*iValue.Id, *iValue.Name, *iValue.RequestId, *rValue.Sender)),
 						}
-						delete(enfantsMap, eKey)
-						delete(enfantsTimers, eKey)
-						fmt.Println(*eValue.Name, "says: I found my parent:", *pValue.Name)
-						// Pas de break puisqu'un parent peut trouver plus d'un enfant lors d'une iteration
+						delete(itemsMap, iKey)
+						delete(itemsTimers, iKey)
+						fmt.Println(*iValue.Name, "est un destinataire de l'envoi de l'entreprise:", *rValue.Sender)
+						// Pas de break puisqu'un request peut trouver plus d'un item lors d'une iteration
 					}
 				}
 			}
+			mutex.Unlock()
+
 		}
 	}
 }

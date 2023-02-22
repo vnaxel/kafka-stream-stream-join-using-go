@@ -2,19 +2,16 @@ version: '3'
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
-    networks:
-      - broker-kafka
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
   kafka:
     image: confluentinc/cp-kafka:latest
-    networks:
-      - broker-kafka
     depends_on:
       - zookeeper
     ports:
       - 9092:9092
+      - 5555:5555
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -23,11 +20,25 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_JMX_OPTS: "-javaagent:/usr/bin/jmx_prometheus_javaagent-0.17.2.jar=5555:/usr/bin/jmx_exporter.yml"
+    volumes:
+      - ./jmx_prometheus_javaagent-0.17.2.jar:/usr/bin/jmx_prometheus_javaagent-0.17.2.jar
+      - ./jmx_exporter.yml:/usr/bin/jmx_exporter.yml
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
 
+  grafana:
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana:/var/lib/grafana
   akhq:
     image: tchiotludo/akhq
-    networks:
-      - broker-kafka
     depends_on:
       - kafka
     ports:
@@ -39,6 +50,3 @@ services:
             docker-kafka-server:
               properties:
                 bootstrap.servers: "kafka:29092"
-networks:
-  broker-kafka:
-    driver: bridge

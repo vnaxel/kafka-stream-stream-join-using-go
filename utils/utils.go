@@ -10,79 +10,83 @@ import (
 	uuid "github.com/satori/go.uuid"
 )
 
+var p1, _ = producer.NewProducer([]string{"localhost:9092"})
+var p2, _ = producer.NewProducer([]string{"localhost:9092"})
+
+
 // Remplissage des topics a l'aide d'un producer sarama passé en paramètre.
-func LoadTopics(p *producer.Producer, topic_enfants, topic_parents string) {
+func LoadTopics(topic_items, topic_requests string) {
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_parents,
+	p1.Input <- &sarama.ProducerMessage{
+		Topic: topic_requests,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewParentMarshal(1, "Michel-Ryan")),
+		Value: sarama.StringEncoder(models.NewRequestMarshal(1, "Maileva")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_parents,
+	p1.Input <- &sarama.ProducerMessage{
+		Topic: topic_requests,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewParentMarshal(2, "Jakeline")),
+		Value: sarama.StringEncoder(models.NewRequestMarshal(2, "Docaposte")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_parents,
+	p1.Input <- &sarama.ProducerMessage{
+		Topic: topic_requests,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewParentMarshal(3, "Jean-Bernadette")),
+		Value: sarama.StringEncoder(models.NewRequestMarshal(3, "La Poste")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(4, "Arya", 1, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(4, "Recipient1", 1, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(5, "Jon", 2, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(5, "Recipient2", 2, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(6, "Mortimer", 3, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(6, "Recipient3", 3, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(7, "Mowgli", 1, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(7, "Recipient4", 1, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(8, "Oliver", 2, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(8, "Recipient5", 2, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(9, "Martine", 3, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(9, "Recipient6", 3, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(10, "Mathilde", 1, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(10, "Recipient7", 1, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(11, "Myriam", 2, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(11, "Recipient8", 2, "")),
 	}
 
-	p.Input <- &sarama.ProducerMessage{
-		Topic: topic_enfants,
+	p2.Input <- &sarama.ProducerMessage{
+		Topic: topic_items,
 		Key:   sarama.StringEncoder(UUID()),
-		Value: sarama.StringEncoder(models.NewEnfantMarshal(12, "Ravi", 3, "")),
+		Value: sarama.StringEncoder(models.NewItemMarshal(12, "Recipient9", 3, "")),
 	}
 
 }
@@ -91,13 +95,13 @@ func UUID() string {
 	return uuid.NewV4().String()
 }
 
-func LoadTopicsOnce(p *producer.Producer, topic_1, topic_2 string) {
+func LoadTopicsOnce(topic_1, topic_2 string) {
 	time.AfterFunc(2000*time.Millisecond, func() {
-		LoadTopics(p, topic_1, topic_2)
+		LoadTopics(topic_1, topic_2)
 	})
 }
 
-func LoadTopicsContinuously(p *producer.Producer, topic_1, topic_2 string, tickerFreq, testDuration time.Duration) {
+func LoadTopicsContinuously(topic_1, topic_2 string, tickerFreq, testDuration time.Duration) {
 	time.AfterFunc(2000*time.Millisecond, func() {
 		fmt.Println("Let's load topics !")
 		tickerFreq := tickerFreq
@@ -110,7 +114,7 @@ func LoadTopicsContinuously(p *producer.Producer, topic_1, topic_2 string, ticke
 			ticker.Stop()
 		})
 		for range ticker.C{
-			LoadTopics(p, topic_1, topic_2)
+			LoadTopics(topic_1, topic_2)
 		}
 	})
 }
